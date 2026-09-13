@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT */
+/* SPDX-License-Identifier: Apache-2.0 */
 /* Standalone software validator for canonical RinOS v3 RIN/NDRV images. */
 #include "rin_formats_v3.h"
 
