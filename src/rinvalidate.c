@@ -241,6 +241,7 @@ static int validate_rin(const Blob *blob, const Options *options) {
     const RinSectionV3 *relocations = NULL, *imports = NULL, *exports = NULL;
     unsigned int code_count = 0, reloc_count = 0, import_count = 0, export_count = 0;
     unsigned int tls_count = 0;
+    unsigned int tls_relocation_count = 0;
     uint64_t content_limit;
     size_t i, j;
     if (blob->size < sizeof(RinHeaderV3)) return -1;
@@ -369,17 +370,24 @@ static int validate_rin(const Blob *blob, const Options *options) {
                 (i && table[i].virtual_address <= table[i - 1].virtual_address) ||
                 (table[i].type != RIN_IMAGE_RELOCATION_ABS64 && table[i].type != RIN_IMAGE_RELOCATION_ABS32U &&
                  table[i].type != RIN_IMAGE_RELOCATION_ABS32S &&
+                 !(table[i].type == RIN_IMAGE_RELOCATION_TLSOFF32S &&
+                   header->abi_minor >= RIN_IMAGE_ABI_MINOR_TLSOFF32S) &&
                  !(header->abi_minor == 0 && table[i].type == RIN_IMAGE_RELOCATION_ABS32)) ||
                 (header->architecture == RIN_ARCH_X86 && width != 4) ||
                 !range_u64(table[i].virtual_address, width, header->image_size)) return -1;
+            if (table[i].type == RIN_IMAGE_RELOCATION_TLSOFF32S)
+                ++tls_relocation_count;
         }
+        if (tls_relocation_count != 0 && tls_count != 1) return -1;
     }
     if (imports) {
         const RinImportV3 *table = (const RinImportV3 *)(blob->data + imports->file_offset);
         uint64_t count = imports->file_size / sizeof(*table);
         for (i = 0; i < count; ++i) {
             if (!string_at(strings, header->string_table_size, table[i].name_offset) || table[i].dependency_index >= header->dependency_count ||
-                table[i].kind > 1 || table[i].reserved0 || table[i].reserved1 ||
+                (table[i].kind != RIN_SYMBOL_FUNCTION &&
+                 table[i].kind != RIN_SYMBOL_DATA) ||
+                table[i].reserved0 || table[i].reserved1 ||
                 !range_u64(table[i].target_rva, header->architecture == RIN_ARCH_X86 ? 4 : 8, header->image_size)) return -1;
         }
     }
@@ -387,7 +395,10 @@ static int validate_rin(const Blob *blob, const Options *options) {
         const RinExportV3 *table = (const RinExportV3 *)(blob->data + exports->file_offset);
         uint64_t count = exports->file_size / sizeof(*table);
         for (i = 0; i < count; ++i) {
-            if (!string_at(strings, header->string_table_size, table[i].name_offset) || table[i].kind > 1 || table[i].reserved ||
+            if (!string_at(strings, header->string_table_size, table[i].name_offset) ||
+                (table[i].kind != RIN_SYMBOL_FUNCTION &&
+                 table[i].kind != RIN_SYMBOL_DATA) ||
+                table[i].reserved ||
                 !range_u64(table[i].virtual_address, table[i].size ? table[i].size : 1, header->image_size)) return -1;
         }
     }
