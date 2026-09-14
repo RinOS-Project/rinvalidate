@@ -486,7 +486,10 @@ static int validate_driver(const Blob *blob, const Options *options) {
     if (strings[0] != '\0') return -1;
     for (i = 0; i < header->section_count; ++i) {
         const RinSectionV3 *section = &sections[i];
+        int alias = section->type >= RIN_IMAGE_SECTION_TLS &&
+                    section->type <= RIN_IMAGE_SECTION_FINI_ARRAY;
         if ((section->type < RIN_IMAGE_SECTION_CODE || section->type > RIN_IMAGE_SECTION_BSS) &&
+            !alias &&
             section->type != RIN_IMAGE_SECTION_RELOCATIONS) return -1;
         if (section->reserved ||
             !power_of_two(section->alignment) || section->alignment > 0x200000 ||
@@ -513,6 +516,13 @@ static int validate_driver(const Blob *blob, const Options *options) {
                 section->file_size % sizeof(RinRelocationV3) != 0) return -1;
             if (relocations) return -1;
             relocations = section;
+        } else if (section->type == RIN_IMAGE_SECTION_UNWIND ||
+                   section->type == RIN_IMAGE_SECTION_INIT_ARRAY ||
+                   section->type == RIN_IMAGE_SECTION_FINI_ARRAY) {
+            if (!section->memory_size || section->file_size != section->memory_size ||
+                !range_u64(section->virtual_address, section->memory_size,
+                           header->image_size) ||
+                section->flags != RIN_IMAGE_SECTION_READ) return -1;
         } else return -1;
         if (section->file_size &&
             (overlap_u64(section->file_offset, section->file_size,
