@@ -29,6 +29,7 @@
 *.dylib
 
 # Executables
+/rinvalidate
 *.exe
 *.out
 *.app
