@@ -132,6 +132,7 @@ typedef uint32_t RinDependencyFlags;
 
 typedef uint16_t RinImportFlagsV3;
 #define RIN_IMPORT_OPTIONAL UINT16_C(0x0001)
+#define RIN_IMPORT_VERSIONED UINT16_C(0x0002)
 
 typedef uint32_t RinDriverImageFlagsV3;
 #define RIN_DRIVER_IMAGE_SIGNED UINT32_C(0x00000001)
