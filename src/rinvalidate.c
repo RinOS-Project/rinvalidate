@@ -242,6 +242,7 @@ static int validate_rin(const Blob *blob, const Options *options) {
     unsigned int code_count = 0, reloc_count = 0, import_count = 0, export_count = 0;
     unsigned int tls_count = 0;
     unsigned int tls_relocation_count = 0;
+    unsigned int dynamic_tls_relocation_count = 0;
     uint64_t content_limit;
     size_t i, j;
     if (blob->size < sizeof(RinHeaderV3)) return -1;
@@ -255,7 +256,8 @@ static int validate_rin(const Blob *blob, const Options *options) {
     }
     if ((header->flags & ~(RIN_IMAGE_EXECUTABLE | RIN_IMAGE_LIBRARY | RIN_IMAGE_GUI |
                            RIN_IMAGE_SERVICE | RIN_IMAGE_RELOCATABLE | RIN_IMAGE_ASLR |
-                           RIN_IMAGE_SIGNED | RIN_IMAGE_USES_TLS)) != 0 ||
+                           RIN_IMAGE_SIGNED | RIN_IMAGE_USES_TLS |
+                           RIN_IMAGE_DYNAMIC_TLS)) != 0 ||
         ((header->flags & RIN_IMAGE_EXECUTABLE) != 0) == ((header->flags & RIN_IMAGE_LIBRARY) != 0) ||
         (strcmp(options->kind, "library") == 0 &&
          ((header->flags & RIN_IMAGE_LIBRARY) == 0 || (header->flags & (RIN_IMAGE_GUI | RIN_IMAGE_SERVICE)) != 0)) ||
@@ -365,21 +367,33 @@ static int validate_rin(const Blob *blob, const Options *options) {
         const RinRelocationV3 *table = (const RinRelocationV3 *)(blob->data + relocations->file_offset);
         uint64_t count = relocations->file_size / sizeof(*table);
         for (i = 0; i < count; ++i) {
-            uint64_t width = table[i].type == RIN_IMAGE_RELOCATION_ABS64 ? 8u : 4u;
+            int is_dynamic_tls =
+                table[i].type == RIN_IMAGE_RELOCATION_TLSINDEX_MODULE64 ||
+                table[i].type == RIN_IMAGE_RELOCATION_TLSINDEX_OFFSET64;
+            uint64_t width = table[i].type == RIN_IMAGE_RELOCATION_ABS64 || is_dynamic_tls ? 8u : 4u;
+            int type_valid = table[i].type == RIN_IMAGE_RELOCATION_ABS64 ||
+                table[i].type == RIN_IMAGE_RELOCATION_ABS32U ||
+                table[i].type == RIN_IMAGE_RELOCATION_ABS32S ||
+                (table[i].type == RIN_IMAGE_RELOCATION_TLSOFF32S &&
+                 header->abi_minor >= RIN_IMAGE_ABI_MINOR_TLSOFF32S) ||
+                (is_dynamic_tls &&
+                 header->abi_minor >= RIN_IMAGE_ABI_MINOR_DYNAMIC_TLS &&
+                 (header->flags & RIN_IMAGE_DYNAMIC_TLS) != 0) ||
+                (header->abi_minor == 0 && table[i].type == RIN_IMAGE_RELOCATION_ABS32);
             if (table[i].reserved0 || table[i].reserved1 || !table[i].virtual_address ||
                 (i && table[i].virtual_address <= table[i - 1].virtual_address) ||
-                (table[i].type != RIN_IMAGE_RELOCATION_ABS64 && table[i].type != RIN_IMAGE_RELOCATION_ABS32U &&
-                 table[i].type != RIN_IMAGE_RELOCATION_ABS32S &&
-                 !(table[i].type == RIN_IMAGE_RELOCATION_TLSOFF32S &&
-                   header->abi_minor >= RIN_IMAGE_ABI_MINOR_TLSOFF32S) &&
-                 !(header->abi_minor == 0 && table[i].type == RIN_IMAGE_RELOCATION_ABS32)) ||
-                (header->architecture == RIN_ARCH_X86 && width != 4) ||
+                !type_valid ||
+                (header->architecture == RIN_ARCH_X86 && width != 4 && !is_dynamic_tls) ||
                 !range_u64(table[i].virtual_address, width, header->image_size)) return -1;
             if (table[i].type == RIN_IMAGE_RELOCATION_TLSOFF32S)
                 ++tls_relocation_count;
+            if (is_dynamic_tls)
+                ++dynamic_tls_relocation_count;
         }
         if (tls_relocation_count != 0 && tls_count != 1) return -1;
     }
+    if (((header->flags & RIN_IMAGE_DYNAMIC_TLS) != 0) !=
+        (dynamic_tls_relocation_count != 0)) return -1;
     if (imports) {
         const RinImportV3 *table = (const RinImportV3 *)(blob->data + imports->file_offset);
         uint64_t count = imports->file_size / sizeof(*table);
