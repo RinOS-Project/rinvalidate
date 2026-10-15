@@ -2,6 +2,7 @@
 CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2
 LDLIBS ?= -lcrypto
+RINOS_SDK_INCLUDE ?= ../../RinOS-SDK/include
 
 # GNU make supplies a built-in `CC=cc`.  On Windows that command is often not
 # installed even when the selected GCC toolchain is available, so use gcc for
@@ -25,8 +26,8 @@ all: rinvalidate
 obj:
 	$(call MKDIR_P,obj)
 
-obj/rinvalidate.o: src/rinvalidate.c include/rin_formats_v3.h | obj
-	$(CC) $(CFLAGS) -Iinclude -c $< -o $@
+obj/rinvalidate.o: src/rinvalidate.c $(RINOS_SDK_INCLUDE)/rin/formats_v3.h | obj
+	$(CC) $(CFLAGS) -I$(RINOS_SDK_INCLUDE) -c $< -o $@
 
 rinvalidate: obj/rinvalidate.o
 	$(CC) -o $@ $^ $(LDLIBS)

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /* Standalone software validator for canonical RinOS v3 RIN/NDRV images. */
-#include "rin_formats_v3.h"
+#include <rin/formats_v3.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -241,6 +241,7 @@ static int validate_rin(const Blob *blob, const Options *options) {
     const RinSectionV3 *relocations = NULL, *imports = NULL, *exports = NULL;
     unsigned int code_count = 0, reloc_count = 0, import_count = 0, export_count = 0;
     unsigned int tls_count = 0;
+    unsigned int unwind_count = 0;
     unsigned int tls_relocation_count = 0;
     unsigned int dynamic_tls_relocation_count = 0;
     uint64_t content_limit;
@@ -302,7 +303,9 @@ static int validate_rin(const Blob *blob, const Options *options) {
         if (section->type == RIN_IMAGE_SECTION_INVALID || section->type > RIN_IMAGE_SECTION_FINI_ARRAY ||
             (section->type > RIN_IMAGE_SECTION_TLS && header->abi_minor < RIN_IMAGE_ABI_MINOR_SPECIAL_SECTIONS) ||
             (section->flags & ~(RIN_IMAGE_SECTION_READ | RIN_IMAGE_SECTION_WRITE |
-                                RIN_IMAGE_SECTION_EXECUTE | RIN_IMAGE_SECTION_DISCARDABLE)) != 0 ||
+                                RIN_IMAGE_SECTION_EXECUTE | RIN_IMAGE_SECTION_DISCARDABLE |
+                                RIN_IMAGE_SECTION_UNWIND_DWARF_DEBUG_FRAME |
+                                RIN_IMAGE_SECTION_UNWIND_EH_FRAME)) != 0 ||
             section->reserved != 0 || !power_of_two(section->alignment) || section->alignment > 0x200000u ||
             (section->virtual_address & (section->alignment - 1u)) != 0 ||
             !string_at(strings, header->string_table_size, section->name_offset)) {
@@ -340,9 +343,24 @@ static int validate_rin(const Blob *blob, const Options *options) {
         } else if (section->type == RIN_IMAGE_SECTION_TLS) {
             ++tls_count;
             if (!section->memory_size || section->file_size > section->memory_size || section->flags != RIN_IMAGE_SECTION_READ) return -1;
-        } else if (section->type == RIN_IMAGE_SECTION_UNWIND || section->type == RIN_IMAGE_SECTION_INIT_ARRAY || section->type == RIN_IMAGE_SECTION_FINI_ARRAY) {
+        } else if (section->type == RIN_IMAGE_SECTION_UNWIND) {
+            uint16_t unwind_format = (uint16_t)(section->flags &
+                RIN_IMAGE_SECTION_UNWIND_FORMAT_MASK);
+            ++unwind_count;
             if (!section->memory_size || section->file_size != section->memory_size ||
-                !range_u64(section->virtual_address, section->memory_size, header->image_size) || section->flags != RIN_IMAGE_SECTION_READ) return -1;
+                !range_u64(section->virtual_address, section->memory_size, header->image_size) ||
+                (section->flags & (uint16_t)~RIN_IMAGE_SECTION_UNWIND_FORMAT_MASK) !=
+                    RIN_IMAGE_SECTION_READ ||
+                (header->abi_minor >= RIN_IMAGE_ABI_MINOR_UNWIND_FORMAT &&
+                 unwind_format != RIN_IMAGE_SECTION_UNWIND_DWARF_DEBUG_FRAME &&
+                 unwind_format != RIN_IMAGE_SECTION_UNWIND_EH_FRAME) ||
+                (header->abi_minor < RIN_IMAGE_ABI_MINOR_UNWIND_FORMAT &&
+                 unwind_format != 0u)) return -1;
+        } else if (section->type == RIN_IMAGE_SECTION_INIT_ARRAY ||
+                   section->type == RIN_IMAGE_SECTION_FINI_ARRAY) {
+            if (!section->memory_size || section->file_size != section->memory_size ||
+                !range_u64(section->virtual_address, section->memory_size, header->image_size) ||
+                section->flags != RIN_IMAGE_SECTION_READ) return -1;
         } else if (section->type == RIN_IMAGE_SECTION_RESOURCES) {
             if (!section->file_size || section->memory_size || section->alignment < 8 || section->flags != RIN_IMAGE_SECTION_READ) return -1;
         }
@@ -358,7 +376,8 @@ static int validate_rin(const Blob *blob, const Options *options) {
                 overlap_u64(section->virtual_address, section->memory_size, other->virtual_address, other->memory_size)) return -1;
         }
     }
-    if (code_count != 1 || reloc_count > 1 || import_count > 1 || export_count > 1 || tls_count > 1 ||
+    if (code_count != 1 || reloc_count > 1 || import_count > 1 || export_count > 1 ||
+        tls_count > 1 || unwind_count > 1 ||
         (strcmp(options->kind, "library") == 0 && header->entry_rva != 0) ||
         (strcmp(options->kind, "library") != 0 &&
          (!code_section || !section_contains(code_section, header->entry_rva, 1)))) return -1;
