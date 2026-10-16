@@ -12,24 +12,28 @@ CC = gcc
 endif
 
 ifeq ($(OS),Windows_NT)
+OBJDIR ?= obj/windows
 MKDIR_P = if not exist "$(1)" mkdir "$(1)"
 RM_RF = if exist "$(1)" rmdir /s /q "$(1)"
 RM_F = if exist "$(1)" del /q "$(1)"
 else
+OBJDIR ?= obj/posix
 MKDIR_P = mkdir -p "$(1)"
 RM_RF = rm -rf "$(1)"
 RM_F = rm -f "$(1)"
 endif
 
+RINVALIDATE_OBJECT = $(OBJDIR)/rinvalidate.o
+
 all: rinvalidate
 
-obj:
-	$(call MKDIR_P,obj)
+$(OBJDIR):
+	$(call MKDIR_P,$@)
 
-obj/rinvalidate.o: src/rinvalidate.c $(RINOS_SDK_INCLUDE)/rin/formats_v3.h | obj
+$(RINVALIDATE_OBJECT): src/rinvalidate.c $(RINOS_SDK_INCLUDE)/rin/formats_v3.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -I$(RINOS_SDK_INCLUDE) -c $< -o $@
 
-rinvalidate: obj/rinvalidate.o
+rinvalidate: $(RINVALIDATE_OBJECT)
 	$(CC) -o $@ $^ $(LDLIBS)
 
 clean:
