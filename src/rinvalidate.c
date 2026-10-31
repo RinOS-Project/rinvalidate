@@ -442,7 +442,9 @@ static int validate_rin(const Blob *blob, const Options *options) {
             if (strcmp(string_at(strings, header->string_table_size, dependencies[j].name_offset), options->required_dependencies[i]) == 0) found = 1;
         if (!found) return -1;
     }
-    if (options->exact_exports && (!exports || exports->file_size / sizeof(RinExportV3) != options->required_export_count)) return -1;
+    if (options->exact_exports &&
+        (exports ? exports->file_size / sizeof(RinExportV3) : 0u) !=
+            options->required_export_count) return -1;
     for (i = 0; i < options->required_export_count; ++i) {
         int found = 0;
         if (exports) {
@@ -452,7 +454,9 @@ static int validate_rin(const Blob *blob, const Options *options) {
         }
         if (!found) return -1;
     }
-    if (options->exact_imports && (!imports || imports->file_size / sizeof(RinImportV3) != options->required_import_count)) return -1;
+    if (options->exact_imports &&
+        (imports ? imports->file_size / sizeof(RinImportV3) : 0u) !=
+            options->required_import_count) return -1;
     for (i = 0; i < options->required_import_count; ++i) {
         int found = 0;
         const char *colon = strchr(options->required_imports[i], ':');
