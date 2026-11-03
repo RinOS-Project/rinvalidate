@@ -83,7 +83,8 @@ typedef enum RinDriverClassV3 {
     RIN_DRIVER_CLASS_AUDIO = 5,
     RIN_DRIVER_CLASS_INPUT = 6,
     RIN_DRIVER_CLASS_USB = 7,
-    RIN_DRIVER_CLASS_RANDOM = 8
+    RIN_DRIVER_CLASS_RANDOM = 8,
+    RIN_DRIVER_CLASS_NPU = 9
 } RinDriverClassV3;
 
 typedef enum RinDriverBusV3 {
