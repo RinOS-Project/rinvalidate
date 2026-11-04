@@ -328,7 +328,8 @@ typedef struct RinDriverHeaderV3 {
     uint16_t signature_algorithm;
     uint16_t hash_algorithm;
     uint8_t content_hash[32];
-    uint64_t reserved[10];
+    uint64_t bind_rva;
+    uint64_t reserved[9];
 } RinDriverHeaderV3;
 
 typedef struct RinDriverMatchV3 {

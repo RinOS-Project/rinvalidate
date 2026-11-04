@@ -515,6 +515,8 @@ static int validate_driver(const Blob *blob, const Options *options) {
         overlap_u64(header->section_table_offset, (uint64_t)header->section_count * sizeof(RinSectionV3), header->string_table_offset, header->string_table_size) ||
         overlap_u64(header->match_table_offset, (uint64_t)header->match_count * sizeof(RinDriverMatchV3), header->string_table_offset, header->string_table_size) ||
         !zero_bytes((const uint8_t *)header->reserved, sizeof(header->reserved)) ||
+        (header->abi_minor < RIN_DRIVER_ABI_MINOR_DEVICE_BIND &&
+         header->bind_rva != 0) ||
         verify_signature(blob->data, blob->size, header->signature_offset, header->signature_size,
                          header->signature_algorithm, header->hash_algorithm, header->content_hash,
         (header->flags & RIN_DRIVER_IMAGE_SIGNED) != 0, options->trust_key, options->allow_unsigned) != 0) return -1;
@@ -573,6 +575,8 @@ static int validate_driver(const Blob *blob, const Options *options) {
                          header->string_table_size))) return -1;
     }
     if (code_count != 1 || !code_section || !section_contains(code_section, header->start_rva, 1) ||
+        (header->bind_rva != 0 &&
+         !section_contains(code_section, header->bind_rva, 1)) ||
         (header->probe_rva >= header->image_size && header->probe_rva != 0) ||
         (header->stop_rva >= header->image_size && header->stop_rva != 0) ||
         (header->remove_rva >= header->image_size && header->remove_rva != 0) ||
